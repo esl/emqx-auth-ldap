@@ -37,7 +37,7 @@ register_metrics() ->
 
 check(ClientInfo = #{username := Username, password := Password}, AuthResult,
       State = #{password_attr := PasswdAttr}) ->
-    CheckResult = case lookup_user(Username, State) of
+    CheckResult = case lookup_user(Username, Password, State) of
                       undefined -> {error, not_found};
                       {error, Error} -> {error, Error};
                       Attributes ->
@@ -62,14 +62,61 @@ check(ClientInfo = #{username := Username, password := Password}, AuthResult,
             {stop, AuthResult#{auth_result => ResultCode, anonymous => false}}
     end.
 
-lookup_user(Username, #{username_attr := UidAttr,
-                        match_objectclass := ObjectClass,
-                        device_dn := DeviceDn}) ->
-    Filter = eldap2:equalityMatch("objectClass", ObjectClass),
-    case search(lists:concat([UidAttr,"=", binary_to_list(Username), ",", DeviceDn]), Filter) of
-        {error, noSuchObject} ->
+lookup_user(Username, Password, #{username_attr := UidAttr,
+                                  match_objectclass := ObjectClass,
+                                  device_dn := DeviceDn,
+                                  post_bind_required := PostBindRequired}) ->
+
+    %% auth.ldap.filters.1.key = "objectClass"
+    %% auth.ldap.filters.1.value = "mqttUser"
+    %% auth.ldap.filters.1.op = "and"
+    %% auth.ldap.filters.2.key = "uiAttr"
+    %% auth.ldap.filters.2.value "someAttr"
+    %% auth.ldap.filters.2.op = "or"
+    %% auth.ldap.filters.3.key = "someKey"
+    %% auth.ldap.filters.3.value = "someValue"
+    %% ==> "|(&(objectClass=Class)(uiAttr=someAttr)(someKey=someValue))"
+
+    %% auth.ldap.custom_base_dn = "${username_attr}=${user},${device_dn}"
+
+    %% TODO Move this to State map
+    FilterEnv = get_custom_filters(),
+    Filter = build_filter(FilterEnv, eldap2:equalityMatch("objectClass", ObjectClass)),
+
+    %% TODO Move this to State map
+    CustomrQuery = get_custom_base_dn(),
+    BaseDN = build_base_dn(CustomQuert, [{"${username_attr}", UidAttr},
+                                         {"${user}", User},
+                                         {"${device_dn}", DeviceDn}]),
+
+    case {search(BaseDN, Filter), PostBindRequired} of
+        {{error, noSuchObject}, _} ->
             undefined;
-        {ok, #eldap_search_result{entries = [Entry]}} ->
+        {{ok, #eldap_search_result{entries = [Entry]}}, true} ->
+            Attributes = Entry#eldap_entry.attributes,
+            case get_value("isEnabled", Attributes) of
+                undefined ->
+                    case emqx_auth_ldap_cli:post_bind(Entry#eldap_entry.object_name, Password) of
+                        ok ->
+                            Attributes;
+                        {error, Reason} ->
+                            {error, Reason}
+                    end;
+                [Val] ->
+                    case list_to_atom(string:to_lower(Val)) of
+                        true ->
+                            case emqx_auth_ldap_cli:post_bind(Entry#eldap_entry.object_name, Password) of
+                                ok ->
+                                    Attributes;
+                                {error, Reason} ->
+                                    {error, Reason}
+                            end;
+                        false ->
+                            {error, username_disabled}
+                    end
+            end;
+
+        {{ok, #eldap_search_result{entries = [Entry]}}, false} ->
             Attributes = Entry#eldap_entry.attributes,
             case get_value("isEnabled", Attributes) of
                 undefined ->

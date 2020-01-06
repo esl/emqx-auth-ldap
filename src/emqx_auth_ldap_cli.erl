@@ -28,6 +28,7 @@
 
 -export([ search/2
         , search/3
+        , post_bind/2
         , init_args/1
         ]).
 
@@ -81,6 +82,18 @@ search(Base, Filter, Attributes) ->
                                                    {attributes, Attributes},
                                                    {deref, eldap2:derefFindingBaseObj()}])
                              end).
+
+post_bind(BindDn, BindPassword) ->
+    ecpool:with_client(?APP, fun(LDAP) ->
+                                     try eldap2:simple_bind(LDAP, BindDn, BindPassword) of
+                                         ok -> ok;
+                                         {error, Error} ->
+                                             {error, Error}
+                                     catch
+                                         error:Reason -> {error, Reason}
+                                     end;
+                                end).
+
 
 init_args(ENVS) ->
     DeviceDn = get_value(device_dn, ENVS),

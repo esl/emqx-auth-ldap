@@ -31,7 +31,8 @@
 start(_StartType, _StartArgs) ->
     {ok, Sup} = emqx_auth_ldap_sup:start_link(),
     if_enabled([device_dn, match_objectclass,
-                username_attr, password_attr],
+                username_attr, password_attr,
+                filters, custom_base_dn],
                fun load_auth_hook/1),
     if_enabled([device_dn, match_objectclass,
                 username_attr, password_attr],
