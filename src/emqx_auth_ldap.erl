@@ -65,29 +65,18 @@ check(ClientInfo = #{username := Username, password := Password}, AuthResult,
 lookup_user(Username, Password, #{username_attr := UidAttr,
                                   match_objectclass := ObjectClass,
                                   device_dn := DeviceDn,
-                                  post_bind_required := PostBindRequired}) ->
+                                  post_bind := PostBindRequired,
+                                  filter := Filters,
+                                  custom_base_dn := CustomBaseDN}) ->
 
-    %% auth.ldap.filters.1.key = "objectClass"
-    %% auth.ldap.filters.1.value = "mqttUser"
-    %% auth.ldap.filters.1.op = "and"
-    %% auth.ldap.filters.2.key = "uiAttr"
-    %% auth.ldap.filters.2.value "someAttr"
-    %% auth.ldap.filters.2.op = "or"
-    %% auth.ldap.filters.3.key = "someKey"
-    %% auth.ldap.filters.3.value = "someValue"
     %% ==> "|(&(objectClass=Class)(uiAttr=someAttr)(someKey=someValue))"
 
+    Filter = compile_filters(Filters, eldap2:equalityMatch("objectClass", ObjectClass)),
+
     %% auth.ldap.custom_base_dn = "${username_attr}=${user},${device_dn}"
-
-    %% TODO Move this to State map
-    FilterEnv = get_custom_filters(),
-    Filter = build_filter(FilterEnv, eldap2:equalityMatch("objectClass", ObjectClass)),
-
-    %% TODO Move this to State map
-    CustomrQuery = get_custom_base_dn(),
-    BaseDN = build_base_dn(CustomQuert, [{"${username_attr}", UidAttr},
-                                         {"${user}", User},
-                                         {"${device_dn}", DeviceDn}]),
+    BaseDN = build_base_dn(CustomBaseDN, [{"${username_attr}", UidAttr},
+                                          {"${user}", Username},
+                                          {"${device_dn}", DeviceDn}]),
 
     case {search(BaseDN, Filter), PostBindRequired} of
         {{error, noSuchObject}, _} ->
@@ -180,3 +169,33 @@ do_resolve(HashType, Passhash, Password) ->
 
 description() -> "LDAP Authentication Plugin".
 
+compile_filters([{K1, V1}, "and", {K2, V2} | Rest], []) ->
+    compile_filters(
+      Rest,
+      eldap2:'and'(compile_equal(K1, V1),
+                   compile_equal(K2, V2)));
+compile_filters([{K1, V1}, "or", {K2, V2} | Rest], []) ->
+    compile_filters(
+      Rest,
+      eldap2:'or'(compile_equal(K1, V1),
+                  compile_equal(K2, V2)));
+compile_filters(["and", {K, V} | Rest], PartialFilter) ->
+    compile_filters(
+      Rest,
+      eldap2:'and'(PartialFilter,
+                   compile_equal(K, V)));
+compile_filters(["or", {K, V} | Rest], PartialFilter) ->
+    compile_filters(
+      Rest,
+      eldap2:'or'(PartialFilter,
+                  compile_equal(K, V)));
+compile_filters([], Filter) ->
+    Filter.
+
+compile_equal(Key, Value) ->
+    eldap2:equalityMatch(Key, Value).
+
+build_base_dn(CustomBaseDN, ReplaceRules) ->
+    lists:foldl(fun({Pattern, Substitute}, DN) ->
+                        lists:flatten(string:replace(DN, Pattern, Substitute))
+                end, CustomBaseDN, ReplaceRules).

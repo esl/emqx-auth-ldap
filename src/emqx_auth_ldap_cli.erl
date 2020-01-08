@@ -91,7 +91,7 @@ post_bind(BindDn, BindPassword) ->
                                              {error, Error}
                                      catch
                                          error:Reason -> {error, Reason}
-                                     end;
+                                     end
                                 end).
 
 

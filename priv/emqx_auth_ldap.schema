@@ -89,6 +89,70 @@ end}.
   {datatype, string}
 ]}.
 
+{mapping, "auth.ldap.custom_base_dn", "emqx_auth_ldap.custom_base_dn", [
+  {default, "${username_attr}=${user},${device_dn}"},
+  {datatype, string}
+]}.
+
+%% auth.ldap.filters.1.key = "objectClass"
+%% auth.ldap.filters.1.value = "mqttUser"
+%% auth.ldap.filters.1.op = "and"
+%% auth.ldap.filters.2.key = "uiAttr"
+%% auth.ldap.filters.2.value "someAttr"
+%% auth.ldap.filters.2.op = "or"
+%% auth.ldap.filters.3.key = "someKey"
+%% auth.ldap.filters.3.value = "someValue"
+%% The configuratation structure sent to the application:
+%%   [{"objectClass","mqttUser"},"and",{"uiAttr","someAttr"},"or",{"someKey","someAttr"}]
+%% The resulting LDAP filter would look like this:
+%% ==> "|(&(objectClass=Class)(uiAttr=someAttr)(someKey=someValue))"
+{translation, "auth.ldap.filters",
+fun(Conf) ->
+        Settings = cuttlefish_variable:filter_by_prefix("filters", Conf),
+        Keys = [{Num, {key, V}} || {["filters", Num, "key"], V} <- Settings],
+        Values = [{Num, {value, V}} || {["filters", Num, "value"], V} <- Settings],
+        Ops = [{Num, {op, V}} || {["filters", Num, "op"], V} <- Settings],
+        RawFilters = Keys ++ Values ++ Ops,
+        Filters =
+            lists:foldl(
+              fun({Num,{T,V}}, Acc)->
+                      maps:update_with(Num,
+                                       fun(F)->
+                                               maps:put(T,V,F)
+                                       end,
+                                       #{T=>V}, Acc)
+              end, #{}, RawFilters),
+        Order=lists:usort(maps:keys(Filters)),
+        lists:reverse(
+          lists:foldl(
+            fun(F,Acc)->
+                    case F of
+                        #{key:=K, op:=Op, value:=V} -> [Op,{K,V}|Acc];
+                        #{key:=K, value:=V} -> [{K,V}|Acc]
+                    end
+            end,
+            [],
+            lists:map(fun(K) -> maps:get(K, Filters) end, Order)))
+end}.
+
+{mapping, "filters.$num,key", "auth.ldap.filters", [
+    {datatype, string}
+]}.
+
+{mapping, "filters.$num.value", "auth.ldap.filters", [
+    {datatype, string}
+]}.
+
+{mapping, "filters.$num.op", "auth.ldap.filters", [
+    {datatype, string}
+]}.
+
+
+{mapping, "auth.ldap.post_bind", "emqx_auth_ldap.post_bind", [
+  {default, false},
+  {datatype, {enum, [true, false]}}
+]}.
+
 {mapping, "auth.ldap.username.attributetype", "emqx_auth_ldap.username_attr", [
   {default, "uid"},
   {datatype, string}
