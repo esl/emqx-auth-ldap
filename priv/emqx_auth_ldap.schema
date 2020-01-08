@@ -80,7 +80,7 @@
 end}.
 
 {mapping, "auth.ldap.device_dn", "emqx_auth_ldap.device_dn", [
-  {default, "ou=device,dc=emqx,dc=i"},
+  {default, "ou=device,dc=emqx,dc=io"},
   {datatype, string}
 ]}.
 

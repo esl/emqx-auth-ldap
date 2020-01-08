@@ -71,12 +71,21 @@ lookup_user(Username, Password, #{username_attr := UidAttr,
 
     %% ==> "|(&(objectClass=Class)(uiAttr=someAttr)(someKey=someValue))"
 
-    Filter = compile_filters(Filters, eldap2:equalityMatch("objectClass", ObjectClass)),
+    ReplaceRules = [{"${username_attr}", UidAttr},
+                    {"${user}", Username},
+                    {"${device_dn}", DeviceDn}],
+
+    SubFilters =
+        lists:map(fun({K, V}) ->
+                          {replace_vars(K, ReplaceRules), replace_vars(V, ReplaceRules)};
+                     (Op) ->
+                          Op
+                  end, Filters),
+
+    Filter = compile_filters(SubFilters, eldap2:equalityMatch("objectClass", ObjectClass)),
 
     %% auth.ldap.custom_base_dn = "${username_attr}=${user},${device_dn}"
-    BaseDN = build_base_dn(CustomBaseDN, [{"${username_attr}", UidAttr},
-                                          {"${user}", Username},
-                                          {"${device_dn}", DeviceDn}]),
+    BaseDN = replace_vars(CustomBaseDN, ReplaceRules),
 
     case {search(BaseDN, Filter), PostBindRequired} of
         {{error, noSuchObject}, _} ->
@@ -195,7 +204,7 @@ compile_filters([], Filter) ->
 compile_equal(Key, Value) ->
     eldap2:equalityMatch(Key, Value).
 
-build_base_dn(CustomBaseDN, ReplaceRules) ->
+replace_vars(CustomBaseDN, ReplaceRules) ->
     lists:foldl(fun({Pattern, Substitute}, DN) ->
                         lists:flatten(string:replace(DN, Pattern, Substitute))
                 end, CustomBaseDN, ReplaceRules).
