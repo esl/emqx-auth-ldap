@@ -35,7 +35,8 @@ start(_StartType, _StartArgs) ->
                 filters, custom_base_dn, post_bind],
                fun load_auth_hook/1),
     if_enabled([device_dn, match_objectclass,
-                username_attr, password_attr],
+                username_attr, password_attr,
+                filters, custom_base_dn, post_bind],
                fun load_acl_hook/1),
     {ok, Sup}.
 

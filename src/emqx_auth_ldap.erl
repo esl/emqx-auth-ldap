@@ -29,6 +29,8 @@
 -export([ register_metrics/0
         , check/3
         , description/0
+        , replace_vars/2
+        , compile_filters/2
         ]).
 
 -spec(register_metrics() -> ok).
@@ -65,9 +67,10 @@ check(ClientInfo = #{username := Username, password := Password}, AuthResult,
 lookup_user(Username, Password, #{username_attr := UidAttr,
                                   match_objectclass := ObjectClass,
                                   device_dn := DeviceDn,
-                                  bind_as_user := PostBindRequired,
-                                  filters := Filters,
-                                  custom_base_dn := CustomBaseDN}) ->
+                                  bind_as_user := BindAsUserRequired,
+                                  custom_base_dn := CustomBaseDN} = Config) ->
+
+    Filters = maps:get(filters, Config, []),
 
     ReplaceRules = [{"${username_attr}", UidAttr},
                     {"${user}", binary_to_list(Username)},
@@ -88,7 +91,7 @@ lookup_user(Username, Password, #{username_attr := UidAttr,
     Filter =
         case SubFilters of
             [] -> eldap2:equalityMatch("objectClass", ObjectClass);
-            List -> compile_filters(SubFilters, [])
+            _List -> compile_filters(SubFilters, [])
         end,
 
     %% auth.ldap.custom_base_dn = "${username_attr}=${user},${device_dn}"

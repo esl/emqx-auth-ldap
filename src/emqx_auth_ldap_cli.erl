@@ -47,6 +47,7 @@ connect(Opts) ->
     Timeout      = get_value(timeout, Opts, 30),
     BindDn       = get_value(bind_dn, Opts),
     BindPassword = get_value(bind_password, Opts),
+    BindAsUser   = get_value(bind_as_user, Opts),
     LdapOpts     = case get_value(ssl, Opts, false) of
                        true ->
                            SslOpts = get_value(sslopts, Opts),
@@ -55,44 +56,72 @@ connect(Opts) ->
                            [{port, Port}, {timeout, Timeout}]
                    end,
     ?LOG(debug, "[LDAP] Connecting to OpenLDAP server: ~p, Opts:~p ...", [Servers, LdapOpts]),
-    case eldap2:open(Servers, LdapOpts) of
-        {ok, LDAP} ->
+    case {BindAsUser, eldap2:open(Servers, LdapOpts)} of
+        {false, {ok, LDAP}} ->
             try eldap2:simple_bind(LDAP, BindDn, BindPassword) of
-                ok -> {ok, LDAP};
+                ok -> {ok, {bound, LDAP}};
                 {error, Error} ->
                     {error, Error}
             catch
                 error:Reason -> {error, Reason}
             end;
-        {error, Reason} ->
+        {true, {ok, LDAP}} ->
+            {ok, {unbound, LDAP, BindDn, BindPassword}};
+        {_, {error, Reason}} ->
             {error, Reason}
     end.
 
 search(Base, Filter) ->
-    ecpool:with_client(?APP, fun(C) ->
-                                 eldap2:search(C, [{base, Base},
-                                                   {filter, Filter},
-                                                   {deref, eldap2:derefFindingBaseObj()}])
-                             end).
+    ecpool:with_client(?APP,
+                       fun({bound, LDAP}) ->
+                               eldap2:search(LDAP, [{base, Base},
+                                                    {filter, Filter},
+                                                    {deref, eldap2:derefFindingBaseObj()}]);
+                          ({unbound, LDAP, BindDn, BindPassword}) ->
+                               try eldap2:simple_bind(LDAP, BindDn, BindPassword) of
+                                   ok ->
+                                       eldap2:search(LDAP, [{base, Base},
+                                                            {filter, Filter},
+                                                            {deref, eldap2:derefFindingBaseObj()}]);
+                                   {error, Error} ->
+                                       {error, Error}
+                               catch
+                                   error:Reason -> {error, Reason}
+                               end
+                       end).
 
 search(Base, Filter, Attributes) ->
-    ecpool:with_client(?APP, fun(C) ->
-                                 eldap2:search(C, [{base, Base},
-                                                   {filter, Filter},
-                                                   {attributes, Attributes},
-                                                   {deref, eldap2:derefFindingBaseObj()}])
-                             end).
+    ecpool:with_client(?APP,
+                       fun({bound, LDAP}) ->
+                               eldap2:search(LDAP, [{base, Base},
+                                                    {filter, Filter},
+                                                    {attributes, Attributes},
+                                                    {deref, eldap2:derefFindingBaseObj()}]);
+                          ({unbound, LDAP, BindDn, BindPassword}) ->
+                               try eldap2:simple_bind(LDAP, BindDn, BindPassword) of
+                                   ok ->
+                                       eldap2:search(LDAP, [{base, Base},
+                                                            {filter, Filter},
+                                                            {attributes, Attributes},
+                                                            {deref, eldap2:derefFindingBaseObj()}]);
+                                   {error, Error} ->
+                                       {error, Error}
+                               catch
+                                   error:Reason -> {error, Reason}
+                               end
+                       end).
 
 post_bind(BindDn, BindPassword) ->
-    ecpool:with_client(?APP, fun(LDAP) ->
-                                     try eldap2:simple_bind(LDAP, BindDn, BindPassword) of
-                                         ok -> ok;
-                                         {error, Error} ->
-                                             {error, Error}
-                                     catch
-                                         error:Reason -> {error, Reason}
-                                     end
-                                end).
+    ecpool:with_client(?APP,
+                       fun(LDAP) ->
+                               try eldap2:simple_bind(LDAP, BindDn, BindPassword) of
+                                   ok -> ok;
+                                   {error, Error} ->
+                                       {error, Error}
+                               catch
+                                   error:Reason -> {error, Reason}
+                               end
+                       end).
 
 
 init_args(ENVS) ->
