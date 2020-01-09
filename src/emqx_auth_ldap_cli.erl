@@ -55,10 +55,9 @@ connect(Opts) ->
                            [{port, Port}, {timeout, Timeout}]
                    end,
     ?LOG(debug, "[LDAP] Connecting to OpenLDAP server: ~p, Opts:~p ...", [Servers, LdapOpts]),
-    {ok, BindAsUser} = application:get_env(?APP, bind_as_user),
 
-    case {BindAsUser, eldap2:open(Servers, LdapOpts)} of
-        {false, {ok, LDAP}} ->
+    case eldap2:open(Servers, LdapOpts) of
+        {ok, LDAP} ->
             try eldap2:simple_bind(LDAP, BindDn, BindPassword) of
                 ok -> {ok, LDAP};
                 {error, Error} ->
@@ -66,8 +65,6 @@ connect(Opts) ->
             catch
                 error:Reason -> {error, Reason}
             end;
-        {true, {ok, LDAP}} ->
-            {ok, LDAP};
         {_, {error, Reason}} ->
             {error, Reason}
     end.
