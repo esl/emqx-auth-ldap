@@ -82,7 +82,11 @@ lookup_user(Username, Password, #{username_attr := UidAttr,
                           Op
                   end, Filters),
 
-    Filter = compile_filters(SubFilters, eldap2:equalityMatch("objectClass", ObjectClass)),
+    Filter =
+        case SubFilters of
+            [] -> eldap2:equalityMatch("objectClass", ObjectClass);
+            List -> compile_filters(SubFilters, [])
+        end,
 
     %% auth.ldap.custom_base_dn = "${username_attr}=${user},${device_dn}"
     BaseDN = replace_vars(CustomBaseDN, ReplaceRules),
@@ -178,6 +182,8 @@ do_resolve(HashType, Passhash, Password) ->
 
 description() -> "LDAP Authentication Plugin".
 
+compile_filters([{Key, Value}], []) ->
+    compile_equal(Key, Value);
 compile_filters([{K1, V1}, "and", {K2, V2} | Rest], []) ->
     compile_filters(
       Rest,

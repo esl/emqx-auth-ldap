@@ -106,7 +106,7 @@ end}.
 %%   [{"objectClass","mqttUser"},"and",{"uiAttr","someAttr"},"or",{"someKey","someAttr"}]
 %% The resulting LDAP filter would look like this:
 %% ==> "|(&(objectClass=Class)(uiAttr=someAttr)(someKey=someValue))"
-{translation, "auth.ldap.filters",
+{translation, "emqx_auth_ldap.filters",
 fun(Conf) ->
         Settings = cuttlefish_variable:filter_by_prefix("auth.ldap.filters", Conf),
         Keys = [{Num, {key, V}} || {["auth","ldap","filters", Num, "key"], V} <- Settings],
