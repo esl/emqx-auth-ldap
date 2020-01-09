@@ -74,8 +74,9 @@ search(Base, Filter) ->
         fun(C) ->
                 case application:get_env(?APP, bind_as_user) of
                     {ok, true} ->
-                        {ok, BindDn} = application:get_env(?APP, bind_dn),
-                        {ok, BindPassword} = application:get_env(?APP, bind_password),
+                        {ok, Opts} = application:get_env(?APP, ldap),
+                        BindDn       = get_value(bind_dn, Opts),
+                        BindPassword = get_value(bind_password, Opts),
                         try eldap2:simple_bind(C, BindDn, BindPassword) of
                             ok ->
                                 eldap2:search(C, [{base, Base},
@@ -98,8 +99,9 @@ search(Base, Filter, Attributes) ->
         fun(C) ->
                 case application:get_env(?APP, bind_as_user) of
                     {ok, true} ->
-                        {ok, BindDn} = application:get_env(?APP, bind_dn),
-                        {ok, BindPassword} = application:get_env(?APP, bind_password),
+                        {ok, Opts} = application:get_env(?APP, ldap),
+                        BindDn       = get_value(bind_dn, Opts),
+                        BindPassword = get_value(bind_password, Opts),
                         try eldap2:simple_bind(C, BindDn, BindPassword) of
                             ok ->
                                 eldap2:search(C, [{base, Base},
