@@ -47,7 +47,6 @@ connect(Opts) ->
     Timeout      = get_value(timeout, Opts, 30),
     BindDn       = get_value(bind_dn, Opts),
     BindPassword = get_value(bind_password, Opts),
-    BindAsUser   = get_value(bind_as_user, Opts),
     LdapOpts     = case get_value(ssl, Opts, false) of
                        true ->
                            SslOpts = get_value(sslopts, Opts),
@@ -56,6 +55,8 @@ connect(Opts) ->
                            [{port, Port}, {timeout, Timeout}]
                    end,
     ?LOG(debug, "[LDAP] Connecting to OpenLDAP server: ~p, Opts:~p ...", [Servers, LdapOpts]),
+    {ok, BindAsUser} = application:get_env(?APP, bind_as_user),
+
     case {BindAsUser, eldap2:open(Servers, LdapOpts)} of
         {false, {ok, LDAP}} ->
             try eldap2:simple_bind(LDAP, BindDn, BindPassword) of
