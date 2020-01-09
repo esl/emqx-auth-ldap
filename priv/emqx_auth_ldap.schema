@@ -148,7 +148,7 @@ end}.
 ]}.
 
 
-{mapping, "auth.ldap.post_bind", "emqx_auth_ldap.post_bind", [
+{mapping, "auth.ldap.bind_as_user", "emqx_auth_ldap.bind_as_user", [
   {default, false},
   {datatype, {enum, [true, false]}}
 ]}.

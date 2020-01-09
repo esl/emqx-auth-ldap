@@ -65,16 +65,19 @@ check(ClientInfo = #{username := Username, password := Password}, AuthResult,
 lookup_user(Username, Password, #{username_attr := UidAttr,
                                   match_objectclass := ObjectClass,
                                   device_dn := DeviceDn,
-                                  post_bind := PostBindRequired,
+                                  bind_as_user := PostBindRequired,
                                   filters := Filters,
                                   custom_base_dn := CustomBaseDN}) ->
-
-    %% ==> "|(&(objectClass=Class)(uiAttr=someAttr)(someKey=someValue))"
 
     ReplaceRules = [{"${username_attr}", UidAttr},
                     {"${user}", binary_to_list(Username)},
                     {"${device_dn}", DeviceDn}],
     PasswordString = binary_to_list(Password),
+
+    %% Here the original filter could be appended to the list of filters, like
+    %% ["and",{"objectClass", ObjectClass}]
+    %% ==> "|(&((objectClass=Class)(uiAttr=someAttr))(someKey=someValue))"
+
     SubFilters =
         lists:map(fun({K, V}) ->
                           {replace_vars(K, ReplaceRules), replace_vars(V, ReplaceRules)};
@@ -91,7 +94,7 @@ lookup_user(Username, Password, #{username_attr := UidAttr,
     %% auth.ldap.custom_base_dn = "${username_attr}=${user},${device_dn}"
     BaseDN = replace_vars(CustomBaseDN, ReplaceRules),
 
-    case {search(BaseDN, Filter), PostBindRequired} of
+    case {search(BaseDN, Filter), BindAsUserRequired} of
         {{error, noSuchObject}, _} ->
             undefined;
         {{ok, #eldap_search_result{entries = [Entry]}}, true} ->
