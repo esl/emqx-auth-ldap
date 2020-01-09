@@ -66,7 +66,7 @@ lookup_user(Username, Password, #{username_attr := UidAttr,
                                   match_objectclass := ObjectClass,
                                   device_dn := DeviceDn,
                                   post_bind := PostBindRequired,
-                                  filter := Filters,
+                                  filters := Filters,
                                   custom_base_dn := CustomBaseDN}) ->
 
     %% ==> "|(&(objectClass=Class)(uiAttr=someAttr)(someKey=someValue))"

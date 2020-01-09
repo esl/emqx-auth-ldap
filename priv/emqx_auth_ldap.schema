@@ -108,10 +108,10 @@ end}.
 %% ==> "|(&(objectClass=Class)(uiAttr=someAttr)(someKey=someValue))"
 {translation, "auth.ldap.filters",
 fun(Conf) ->
-        Settings = cuttlefish_variable:filter_by_prefix("filters", Conf),
-        Keys = [{Num, {key, V}} || {["filters", Num, "key"], V} <- Settings],
-        Values = [{Num, {value, V}} || {["filters", Num, "value"], V} <- Settings],
-        Ops = [{Num, {op, V}} || {["filters", Num, "op"], V} <- Settings],
+        Settings = cuttlefish_variable:filter_by_prefix("auth.ldap.filters", Conf),
+        Keys = [{Num, {key, V}} || {["auth","ldap","filters", Num, "key"], V} <- Settings],
+        Values = [{Num, {value, V}} || {["auth","ldap","filters", Num, "value"], V} <- Settings],
+        Ops = [{Num, {op, V}} || {["auth","ldap","filters", Num, "op"], V} <- Settings],
         RawFilters = Keys ++ Values ++ Ops,
         Filters =
             lists:foldl(
@@ -135,15 +135,15 @@ fun(Conf) ->
             lists:map(fun(K) -> maps:get(K, Filters) end, Order)))
 end}.
 
-{mapping, "filters.$num,key", "auth.ldap.filters", [
+{mapping, "auth.ldap.filters.$num.key", "emqx_auth_ldap.filters", [
     {datatype, string}
 ]}.
 
-{mapping, "filters.$num.value", "auth.ldap.filters", [
+{mapping, "auth.ldap.filters.$num.value", "emqx_auth_ldap.filters", [
     {datatype, string}
 ]}.
 
-{mapping, "filters.$num.op", "auth.ldap.filters", [
+{mapping, "auth.ldap.filters.filters.$num.op", "emqx_auth_ldap.filters", [
     {datatype, string}
 ]}.
 
