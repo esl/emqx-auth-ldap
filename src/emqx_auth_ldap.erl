@@ -72,9 +72,9 @@ lookup_user(Username, Password, #{username_attr := UidAttr,
     %% ==> "|(&(objectClass=Class)(uiAttr=someAttr)(someKey=someValue))"
 
     ReplaceRules = [{"${username_attr}", UidAttr},
-                    {"${user}", Username},
+                    {"${user}", binary_to_list(Username)},
                     {"${device_dn}", DeviceDn}],
-
+    PasswordString = binary_to_list(Password),
     SubFilters =
         lists:map(fun({K, V}) ->
                           {replace_vars(K, ReplaceRules), replace_vars(V, ReplaceRules)};
@@ -98,7 +98,7 @@ lookup_user(Username, Password, #{username_attr := UidAttr,
             Attributes = Entry#eldap_entry.attributes,
             case get_value("isEnabled", Attributes) of
                 undefined ->
-                    case emqx_auth_ldap_cli:post_bind(Entry#eldap_entry.object_name, Password) of
+                    case emqx_auth_ldap_cli:post_bind(Entry#eldap_entry.object_name, PasswordString) of
                         ok ->
                             Attributes;
                         {error, Reason} ->
@@ -107,7 +107,7 @@ lookup_user(Username, Password, #{username_attr := UidAttr,
                 [Val] ->
                     case list_to_atom(string:to_lower(Val)) of
                         true ->
-                            case emqx_auth_ldap_cli:post_bind(Entry#eldap_entry.object_name, Password) of
+                            case emqx_auth_ldap_cli:post_bind(Entry#eldap_entry.object_name, PasswordString) of
                                 ok ->
                                     Attributes;
                                 {error, Reason} ->
