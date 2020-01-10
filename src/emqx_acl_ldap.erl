@@ -30,6 +30,9 @@
 
 -import(emqx_auth_ldap_cli, [search/3]).
 
+-import(emqx_auth_ldap, [replace_vars/2,
+                         compile_filters/2]).
+
 register_metrics() ->
     [emqx_metrics:new(MetricName) || MetricName <- ['acl.ldap.allow', 'acl.ldap.deny', 'acl.ldap.ignore']].
 
@@ -44,17 +47,41 @@ do_check_acl(#{username := <<$$, _/binary>>}, _PubSub, _Topic, _NoMatchAction, _
     ok;
 
 do_check_acl(#{username := Username}, PubSub, Topic, _NoMatchAction,
-          #{device_dn := DeviceDn,
-            match_objectclass := ObjectClass,
-            username_attr := UidAttr}) ->
-    Filter = eldap2:equalityMatch("objectClass", ObjectClass),
+             #{device_dn         := DeviceDn,
+               match_objectclass := ObjectClass,
+               username_attr     := UidAttr,
+               custom_base_dn    := CustomBaseDN} = Config) ->
+
+    Filters = maps:get(filters, Config, []),
+
+    ReplaceRules = [{"${username_attr}", UidAttr},
+                    {"${user}", binary_to_list(Username)},
+                    {"${device_dn}", DeviceDn}],
+
+    SubFilters =
+        lists:map(fun({K, V}) ->
+                          {replace_vars(K, ReplaceRules), replace_vars(V, ReplaceRules)};
+                     (Op) ->
+                          Op
+                  end, Filters),
+
+    Filter =
+        case SubFilters of
+            [] -> eldap2:equalityMatch("objectClass", ObjectClass);
+            _List -> compile_filters(SubFilters, [])
+        end,
+
     Attribute = case PubSub of
                     publish   -> "mqttPublishTopic";
                     subscribe -> "mqttSubscriptionTopic"
                 end,
     Attribute1 = "mqttPubSubTopic",
-    ?LOG(debug, "[LDAP] search dn:~p filter:~p, attribute:~p", [DeviceDn, Filter, Attribute]),
-    case search(concat([UidAttr,"=", binary_to_list(Username), ",", DeviceDn]), Filter, [Attribute, Attribute1]) of
+    ?LOG(debug, "[LDAP] search dn:~p filter:~p, attribute:~p",
+         [DeviceDn, Filter, Attribute]),
+
+    BaseDN = replace_vars(CustomBaseDN, ReplaceRules),
+
+    case search(BaseDN, Filter, [Attribute, Attribute1]) of
         {error, noSuchObject} ->
             ok;
         {ok, #eldap_search_result{entries = []}} ->
