@@ -30,9 +30,7 @@
 
 -import(emqx_auth_ldap_cli, [search/3]).
 
--import(emqx_auth_ldap, [replace_vars/2,
-                         compile_filters/2]).
-
+-spec(register_metrics() -> ok).
 register_metrics() ->
     [emqx_metrics:new(MetricName) || MetricName <- ['acl.ldap.allow', 'acl.ldap.deny', 'acl.ldap.ignore']].
 
@@ -58,18 +56,7 @@ do_check_acl(#{username := Username}, PubSub, Topic, _NoMatchAction,
                     {"${user}", binary_to_list(Username)},
                     {"${device_dn}", DeviceDn}],
 
-    SubFilters =
-        lists:map(fun({K, V}) ->
-                          {replace_vars(K, ReplaceRules), replace_vars(V, ReplaceRules)};
-                     (Op) ->
-                          Op
-                  end, Filters),
-
-    Filter =
-        case SubFilters of
-            [] -> eldap2:equalityMatch("objectClass", ObjectClass);
-            _List -> compile_filters(SubFilters, [])
-        end,
+    Filter = emqx_auth_ldap:prepare_filter(Filters, UidAttr, ObjectClass, ReplaceRules),
 
     Attribute = case PubSub of
                     publish   -> "mqttPublishTopic";
@@ -79,7 +66,7 @@ do_check_acl(#{username := Username}, PubSub, Topic, _NoMatchAction,
     ?LOG(debug, "[LDAP] search dn:~p filter:~p, attribute:~p",
          [DeviceDn, Filter, Attribute]),
 
-    BaseDN = replace_vars(CustomBaseDN, ReplaceRules),
+    BaseDN = emqx_auth_ldap:replace_vars(CustomBaseDN, ReplaceRules),
 
     case search(BaseDN, Filter, [Attribute, Attribute1]) of
         {error, noSuchObject} ->
